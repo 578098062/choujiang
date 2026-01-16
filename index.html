@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="format-detection" content="telephone=no">
+    <title>幸运大转盘</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        
+        .wheel-container {
+            position: relative;
+            width: 320px;
+            height: 320px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .wheel {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            transition: transform 4s cubic-bezier(0.23, 1, 0.32, 1);
+            background: white;
+        }
+        
+        .wheel-center {
+            position: absolute;
+            top: 160px;
+            left: 160px;
+            transform: translate(-50%, -50%);
+            width: 70px;
+            height: 70px;
+            background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+            border-radius: 50%;
+            border: 4px solid white;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            z-index: 20;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+            color: white;
+        }
+        
+        .wheel-center:active {
+            transform: translate(-50%, -50%) scale(0.95);
+        }
+        
+        .wheel-pointer {
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 0;
+            height: 0;
+            border-left: 15px solid transparent;
+            border-right: 15px solid transparent;
+            border-top: 35px solid #ff6b6b;
+            z-index: 15;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.3));
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.5s ease-in;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        
+        .confetti {
+            position: fixed;
+            width: 10px;
+            height: 10px;
+            background: #f0f;
+            animation: confetti-fall 3s linear;
+            z-index: 1000;
+        }
+        
+        @keyframes confetti-fall {
+            to {
+                transform: translateY(100vh) rotate(360deg);
+                opacity: 0;
+            }
+        }
+        
+        .name-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 8px;
+            max-width: 300px;
+            margin: 0 auto;
+        }
+        
+        .name-button {
+            padding: 12px 8px;
+            border: 2px solid rgba(255,255,255,0.3);
+            background: rgba(255,255,255,0.1);
+            color: white;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            text-align: center;
+        }
+        
+        .name-button:hover {
+            background: rgba(255,255,255,0.2);
+            border-color: rgba(255,255,255,0.5);
+            transform: translateY(-2px);
+        }
+        
+        .name-button:active {
+            transform: translateY(0);
+        }
+    </style>
+</head>
+<body>
+    <!-- 验证界面 -->
+    <div id="verifyPage" class="min-h-screen flex flex-col items-center justify-center p-4">
+        <div class="bg-white/90 backdrop-blur-sm rounded-2xl p-6 w-full max-w-md fade-in">
+            <h1 class="text-2xl font-bold text-center mb-2 text-gray-800">🎯 幸运大转盘</h1>
+            <p class="text-center text-gray-600 mb-6">请输入您的姓名参与抽奖</p>
+            
+            <div class="mb-6">
+                <input 
+                    type="text" 
+                    id="nameInput" 
+                    placeholder="请输入姓名" 
+                    class="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:border-blue-500 focus:outline-none text-center text-lg"
+                    maxlength="10"
+                >
+                <div id="nameError" class="text-red-500 text-sm mt-2 hidden">姓名不在名单中，请核对后重新输入</div>
+            </div>
+            
+            <button 
+                id="submitName" 
+                class="w-full bg-blue-500 text-white py-3 rounded-lg font-medium hover:bg-blue-600 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+            >
+                验证身份
+            </button>
+            
+            <div class="mt-6 text-center">
+                <p class="text-xs text-gray-500">公平抽奖 · 每人都有机会</p>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 抽奖界面 -->
+    <div id="wheelPage" class="min-h-screen flex flex-col items-center justify-center p-4 hidden">
+        <div class="bg-white/90 backdrop-blur-sm rounded-2xl p-6 w-full max-w-md fade-in">
+            <div class="text-center mb-4">
+                <h2 class="text-xl font-bold text-gray-800">
+                    <span id="userName"></span>的幸运抽奖
+                </h2>
+                <p class="text-sm text-gray-600 mt-1">点击中心开始抽奖</p>
+            </div>
+            
+            <div class="wheel-container">
+                <div class="wheel-pointer"></div>
+                <div class="wheel" id="wheel">
+                    <!-- 动态生成转盘扇形 -->
+                </div>
+                <div class="wheel-center pulse" id="startBtn">
+                    开始
+                </div>
+            </div>
+            
+            <div class="mt-6 flex justify-between">
+                <button onclick="showRules()" class="text-sm text-blue-600 underline">
+                    抽奖规则
+                </button>
+                <button onclick="logout()" class="text-sm text-gray-600 underline">
+                    退出登录
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 结果界面 -->
+    <div id="resultPage" class="min-h-screen flex flex-col items-center justify-center p-4 hidden">
+        <div class="bg-white/90 backdrop-blur-sm rounded-2xl p-6 w-full max-w-md fade-in text-center">
+            <div class="text-6xl mb-4">🎉</div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">恭喜中奖！</h2>
+            <div class="text-lg font-semibold text-blue-600 mb-4" id="prizeDisplay"></div>
+            <p class="text-gray-600 mb-6">请记录您的奖品，及时领取</p>
+            
+            <div class="space-y-3">
+                <button onclick="shareResult()" class="w-full bg-green-500 text-white py-3 rounded-lg font-medium hover:bg-green-600 transition-colors">
+                    分享喜悦
+                </button>
+                <button onclick="logout()" class="w-full bg-gray-500 text-white py-3 rounded-lg font-medium hover:bg-gray-600 transition-colors">
+                    退出
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 已抽奖界面 -->
+    <div id="alreadyDrawnPage" class="min-h-screen flex flex-col items-center justify-center p-4 hidden">
+        <div class="bg-white/90 backdrop-blur-sm rounded-2xl p-6 w-full max-w-md fade-in text-center">
+            <div class="text-6xl mb-4">🎁</div>
+            <h2 class="text-2xl font-bold text-gray-800 mb-2">
+                <span id="drawnUserName"></span>
+            </h2>
+            <p class="text-gray-600 mb-2">您已经参与过抽奖</p>
+            <div class="bg-yellow-50 border-2 border-yellow-200 rounded-lg p-4 mb-6">
+                <p class="text-sm text-gray-700 mb-1">您的奖品是：</p>
+                <p class="text-xl font-bold text-yellow-600" id="drawnPrize"></p>
+            </div>
+            
+            <button onclick="logout()" class="w-full bg-gray-500 text-white py-3 rounded-lg font-medium hover:bg-gray-600 transition-colors">
+                退出
+            </button>
+        </div>
+    </div>
+
+    <!-- 规则弹窗 -->
+    <div id="rulesModal" class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 hidden z-50">
+        <div class="bg-white rounded-2xl p-6 max-w-md w-full">
+            <h3 class="text-xl font-bold mb-4">📋 抽奖规则</h3>
+            <div class="text-sm text-gray-700 space-y-2">
+                <p>• 每人只能参与一次抽奖</p>
+                <p>• 抽奖结果随机公平</p>
+                <p>• 奖品数量有限，抽完即止</p>
+                <p>• 请妥善保管中奖记录</p>
+            </div>
+            <button onclick="hideRules()" class="mt-6 w-full bg-blue-500 text-white py-2 rounded-lg">
+                知道了
+            </button>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
