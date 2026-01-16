@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSONBin Access Key 配置</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; max-width: 700px; margin: 0 auto; }
+        .step { background: #f8f9fa; padding: 15px; margin: 15px 0; border-radius: 8px; border-left: 4px solid #007bff; }
+        .step h3 { margin-top: 0; color: #007bff; }
+        button { background: #007bff; color: white; border: none; padding: 12px 24px; border-radius: 5px; cursor: pointer; font-size: 16px; margin: 5px; }
+        button:hover { background: #0056b3; }
+        input, textarea { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ddd; border-radius: 5px; font-family: monospace; }
+        .result { background: #d4edda; color: #155724; padding: 15px; border-radius: 5px; margin: 10px 0; }
+        .error { background: #f8d7da; color: #721c24; }
+        code { background: #f1f3f4; padding: 2px 6px; border-radius: 3px; }
+        .highlight { background: #fff3cd; padding: 10px; border-radius: 5px; border: 1px solid #ffeaa7; }
+    </style>
+</head>
+<body>
+    <h1>🔐 JSONBin Access Key 配置工具</h1>
+    
+    <div class="highlight">
+        <h3>📋 您的API Key信息</h3>
+        <p><strong>X-Access-Key:</strong> $2a$10$h8vxevEkPmm6QekSX6y3uuIM5wOPUgT0mTx02sZzEEh8GlNhaptjG</p>
+        <p><strong>Access Key ID:</strong> 6969b546d0ea881f406f1b1b</p>
+        <p><strong>权限:</strong> bins (update, delete, create, read)</p>
+    </div>
+    
+    <div class="step">
+        <h3>步骤 1: 确认API Key</h3>
+        <p>您的Access Key已经显示在上面的黄色框中，复制这个完整的字符串：</p>
+        <textarea id="apiKey" rows="3">$2a$10$h8vxevEkPmm6QekSX6y3uuIM5wOPUgT0mTx02sZzEEh8GlNhaptjG</textarea>
+        <button onclick="createLotteryBin()">🎯 使用此Key创建Bin</button>
+    </div>
+    
+    <div class="step">
+        <h3>步骤 2: 获取配置代码</h3>
+        <p>点击下方按钮生成正确的配置：</p>
+        <button onclick="generateConfig()">⚙️ 生成配置代码</button>
+        
+        <h4>复制此配置到config.js文件：</h4>
+        <pre id="configOutput">// 请点击上方"生成配置代码"按钮</pre>
+        <button onclick="copyConfig()">📋 复制配置</button>
+    </div>
+    
+    <div id="results"></div>
+
+    <script>
+        async function createLotteryBin() {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            const results = document.getElementById('results');
+            
+            if (!apiKey) {
+                results.innerHTML = '<div class="step error"><h3>❌ API Key无效</h3><p>请输入您的X-Access-Key</p></div>';
+                return;
+            }
+            
+            results.innerHTML = '<div class="step"><h3>⏳ 正在创建Bin...</h3><p>使用您的Access Key创建专用的抽奖数据存储...</p></div>';
+            
+            try {
+                // 创建抽奖专用的Bin数据结构
+                const lotteryData = {
+                    records: [],
+                    created_at: new Date().toISOString(),
+                    last_updated: new Date().toISOString(),
+                    metadata: {
+                        purpose: "lucky_wheel_lottery",
+                        version: "1.0",
+                        created_by: "access_key_setup_tool"
+                    }
+                };
+                
+                const response = await fetch('https://api.jsonbin.io/v3/b', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Access-Key': apiKey  // 使用X-Access-Key而不是X-Master-Key
+                    },
+                    body: JSON.stringify(lotteryData)
+                });
+                
+                console.log('创建Bin响应:', response);
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    const binId = data.metadata.id;
+                    
+                    results.innerHTML = `
+                        <div class="result">
+                            <h3>✅ Bin创建成功！</h3>
+                            <p><strong>新Bin ID:</strong> ${binId}</p>
+                            <p><strong>访问地址:</strong> <a href="https://jsonbin.io/${binId}" target="_blank">https://jsonbin.io/${binId}</a></p>
+                            <p>现在点击"生成配置代码"按钮获取完整配置</p>
+                        </div>
+                    `;
+                    
+                    // 自动生成配置
+                    generateConfigWithBin(binId);
+                } else {
+                    const error = await response.text();
+                    results.innerHTML = `
+                        <div class="step error">
+                            <h3>❌ 创建失败</h3>
+                            <p><strong>错误:</strong> ${error}</p>
+                            <p><strong>状态码:</strong> ${response.status}</p>
+                            <p><strong>注意:</strong> 确保您的Access Key具有create权限</p>
+                        </div>
+                    `;
+                }
+            } catch (error) {
+                results.innerHTML = `
+                    <div class="step error">
+                        <h3>❌ 网络错误</h3>
+                        <p>${error.message}</p>
+                    </div>
+                `;
+            }
+        }
+        
+        function generateConfig() {
+            generateConfigWithBin('6969b546d0ea881f406f1b1b');
+        }
+        
+        function generateConfigWithBin(binId) {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            
+            const config = `// JSONBin配置（使用Access Key）
+const JSONBIN_CONFIG = {
+    apiKey: '${apiKey}',    // X-Access-Key
+    binId: '${binId}'      // 您的Bin ID
+};`;
+            
+            document.getElementById('configOutput').textContent = config;
+        }
+        
+        function copyConfig() {
+            const configOutput = document.getElementById('configOutput');
+            if (configOutput.textContent.includes('// 请点击上方')) {
+                alert('❌ 请先创建Bin或生成配置代码');
+                return;
+            }
+            
+            navigator.clipboard.writeText(configOutput.textContent).then(() => {
+                alert('✅ 配置已复制到剪贴板！\n\n请粘贴到config.js文件中替换现有配置');
+            }).catch(() => {
+                alert('❌ 复制失败，请手动复制上方配置代码');
+            });
+        }
+        
+        // 页面加载时自动生成配置
+        window.onload = () => {
+            generateConfig();
+        };
+    </script>
+</body>
+</html>

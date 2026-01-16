@@ -19,10 +19,10 @@ const GITEE_CONFIG = {
     token: 'your-gitee-token'        // Gitee Personal Access Token
 };
 
-// JSONBin配置（推荐，完全免费）
+// JSONBin配置（使用Master Key访问私有Bin）
 const JSONBIN_CONFIG = {
-    apiKey: '$2a$10$h8vxevEkPmm6QekSX6y3uuIM5wOPUgT0mTx02sZzEEh8GlNhaptjG',   // 例如：60f1a2b3c4d5e6f7g8h9i0j1k2l3m4n5
-    binId: '6969b59a43b1c97be933c359'                 // 例如：6969b59a43b1c97be933c359
+    apiKey: '$2a$10$6DvGREHxbTCwbXxvZCl.OelVu2PuxCldw3Lhugi7w7Gogrqpa94i6',   // X-Master-Key
+    binId: '6969b59a43b1c97be933c359'                                           // 您的私有Bin ID
 };
 
 // 初始化云数据管理器
@@ -37,7 +37,7 @@ function initCloudManager() {
         return manager;
     } else if (STORAGE_TYPE === 'jsonbin') {
         const manager = new CloudDataManager();
-        Object.assign(manager, JSONBIN_CONFIG);
+        manager.init(JSONBIN_CONFIG.apiKey, JSONBIN_CONFIG.binId);
         return manager;
     } else {
         // 使用本地存储

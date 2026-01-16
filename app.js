@@ -24,117 +24,13 @@ const participants = [
 // 全局变量
 let currentUser = null;
 let isSpinning = false;
-let prizePool = [];
-
-// IndexedDB 初始化
-class LotteryDB {
-    constructor() {
-        this.dbName = 'LotteryDB';
-        this.version = 1;
-        this.db = null;
-    }
-
-    async init() {
-        return new Promise((resolve, reject) => {
-            const request = indexedDB.open(this.dbName, this.version);
-            
-            request.onerror = () => reject(request.error);
-            request.onsuccess = () => {
-                this.db = request.result;
-                resolve();
-            };
-            
-            request.onupgradeneeded = (event) => {
-                const db = event.target.result;
-                
-                // 创建抽奖记录表
-                if (!db.objectStoreNames.contains('records')) {
-                    const recordStore = db.createObjectStore('records', { keyPath: 'id' });
-                    recordStore.createIndex('userName', 'userName', { unique: false });
-                    recordStore.createIndex('timestamp', 'timestamp', { unique: false });
-                }
-                
-                // 创建奖品池表
-                if (!db.objectStoreNames.contains('prizePool')) {
-                    db.createObjectStore('prizePool', { keyPath: 'id' });
-                }
-            };
-        });
-    }
-
-    async addRecord(record) {
-        return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction(['records'], 'readwrite');
-            const store = transaction.objectStore('records');
-            const request = store.add({
-                ...record,
-                id: Date.now() + Math.random(),
-                timestamp: new Date().toISOString()
-            });
-            
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    async getRecordByUserName(userName) {
-        return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction(['records'], 'readonly');
-            const store = transaction.objectStore('records');
-            const index = store.index('userName');
-            const request = index.get(userName);
-            
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    async getAllRecords() {
-        return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction(['records'], 'readonly');
-            const store = transaction.objectStore('records');
-            const request = store.getAll();
-            
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    async updatePrizePool(pool) {
-        return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction(['prizePool'], 'readwrite');
-            const store = transaction.objectStore('prizePool');
-            const request = store.put({
-                id: 'current',
-                pool: pool,
-                timestamp: new Date().toISOString()
-            });
-            
-            request.onsuccess = () => resolve(request.result);
-            request.onerror = () => reject(request.error);
-        });
-    }
-
-    async getPrizePool() {
-        return new Promise((resolve, reject) => {
-            const transaction = this.db.transaction(['prizePool'], 'readonly');
-            const store = transaction.objectStore('prizePool');
-            const request = store.get('current');
-            
-            request.onsuccess = () => resolve(request.result ? request.result.pool : null);
-            request.onerror = () => reject(request.error);
-        });
-    }
-}
-
-const lotteryDB = new LotteryDB();
 
 // 初始化奖品池
 function initPrizePool() {
-    prizePool = [];
+    window.prizePool = [];
     prizes.forEach((prize, index) => {
         for (let i = 0; i < prize.count; i++) {
-            prizePool.push({
+            window.prizePool.push({
                 ...prize,
                 uniqueId: `${prize.name}_${i}`,
                 originalIndex: index
@@ -296,25 +192,20 @@ function setupInputListeners() {
 async function selectUser(userName) {
     currentUser = userName;
     
-    // 检查是否已经抽奖（云端优先）
+    // 检查是否已经抽奖（只检查云端）
     try {
-        // 先检查云端记录
         const cloudRecords = await cloudManager.readRecords();
-        const cloudExisting = cloudRecords.find(r => r.userName === userName);
+        const existingRecord = cloudRecords.find(r => r.userName === userName);
         
-        if (cloudExisting) {
-            showAlreadyDrawn(userName, cloudExisting.prize);
-            return;
-        }
-        
-        // 再检查本地记录
-        const existingRecord = await lotteryDB.getRecordByUserName(userName);
         if (existingRecord) {
             showAlreadyDrawn(userName, existingRecord.prize);
             return;
         }
     } catch (error) {
-        console.error('查询记录失败:', error);
+        console.error('查询云端记录失败:', error);
+        // 如果云端查询失败，不允许抽奖以保证数据一致性
+        alert('无法验证抽奖记录，请检查网络连接后重试');
+        return;
     }
     
     // 进入抽奖界面
@@ -340,22 +231,9 @@ async function startLottery() {
     startBtn.textContent = '抽奖中...';
     startBtn.style.cursor = 'not-allowed';
     
-    // 获取或初始化奖品池
-    let currentPool = await lotteryDB.getPrizePool();
-    if (!currentPool || currentPool.length === 0) {
-        initPrizePool();
-        currentPool = shuffleArray(prizePool);
-        await lotteryDB.updatePrizePool(currentPool);
-    }
-    
-    // 确保有奖品可抽
-    if (currentPool.length === 0) {
-        alert('抱歉，奖品已抽完！');
-        isSpinning = false;
-        startBtn.textContent = '开始';
-        startBtn.style.cursor = 'pointer';
-        return;
-    }
+    // 初始化奖品池
+    initPrizePool();
+    const currentPool = shuffleArray(prizePool);
     
     // 随机选择一个奖品
     const prizeIndex = Math.floor(Math.random() * currentPool.length);
@@ -370,31 +248,23 @@ async function startLottery() {
     
     // 等待动画完成
     setTimeout(async () => {
-        // 更新奖品池
-        currentPool.splice(prizeIndex, 1);
-        await lotteryDB.updatePrizePool(currentPool);
-        
-        // 保存抽奖记录（云端优先）
+        // 保存抽奖记录到云端
         try {
-            const cloudSaveResult = await cloudManager.saveRecord(
+            await cloudManager.saveRecord(
                 currentUser, 
                 selectedPrize.name, 
                 selectedPrize.uniqueId
             );
-            
-            if (cloudSaveResult) {
-                console.log('云端保存成功');
-            }
+            console.log('云端保存成功');
         } catch (error) {
-            console.warn('云端保存失败，使用本地存储:', error);
+            console.error('云端保存失败:', error);
+            alert('抽奖记录保存失败，请检查网络连接');
+            // 保存失败时不显示结果，允许重新尝试
+            isSpinning = false;
+            startBtn.textContent = '开始';
+            startBtn.style.cursor = 'pointer';
+            return;
         }
-        
-        // 本地备份保存
-        await lotteryDB.addRecord({
-            userName: currentUser,
-            prize: selectedPrize.name,
-            prizeId: selectedPrize.uniqueId
-        });
         
         // 显示结果
         showResult(selectedPrize.name);
@@ -483,11 +353,15 @@ function logout() {
 // 初始化应用
 async function initApp() {
     try {
-        await lotteryDB.init();
-        
         // 初始化云数据管理器
         if (typeof initCloudManager === 'function') {
             cloudManager = initCloudManager();
+        }
+        
+        // 验证云存储配置
+        if (!cloudManager || !cloudManager.apiKey || !cloudManager.binId) {
+            alert('云存储配置错误，请检查config.js文件');
+            return;
         }
         
         generateWheel();
