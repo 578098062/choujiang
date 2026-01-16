@@ -128,6 +128,7 @@ class LotteryDB {
 }
 
 const lotteryDB = new LotteryDB();
+const cloudManager = new CloudDataManager();
 
 // 初始化奖品池
 function initPrizePool() {
@@ -296,8 +297,18 @@ function setupInputListeners() {
 async function selectUser(userName) {
     currentUser = userName;
     
-    // 检查是否已经抽奖
+    // 检查是否已经抽奖（云端优先）
     try {
+        // 先检查云端记录
+        const cloudRecords = await cloudManager.readRecords();
+        const cloudExisting = cloudRecords.find(r => r.userName === userName);
+        
+        if (cloudExisting) {
+            showAlreadyDrawn(userName, cloudExisting.prize);
+            return;
+        }
+        
+        // 再检查本地记录
         const existingRecord = await lotteryDB.getRecordByUserName(userName);
         if (existingRecord) {
             showAlreadyDrawn(userName, existingRecord.prize);
@@ -364,7 +375,22 @@ async function startLottery() {
         currentPool.splice(prizeIndex, 1);
         await lotteryDB.updatePrizePool(currentPool);
         
-        // 保存抽奖记录
+        // 保存抽奖记录（云端优先）
+        try {
+            const cloudSaveResult = await cloudManager.saveRecord(
+                currentUser, 
+                selectedPrize.name, 
+                selectedPrize.uniqueId
+            );
+            
+            if (cloudSaveResult) {
+                console.log('云端保存成功');
+            }
+        } catch (error) {
+            console.warn('云端保存失败，使用本地存储:', error);
+        }
+        
+        // 本地备份保存
         await lotteryDB.addRecord({
             userName: currentUser,
             prize: selectedPrize.name,
