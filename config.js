@@ -21,8 +21,8 @@ const GITEE_CONFIG = {
 
 // JSONBin配置（推荐，完全免费）
 const JSONBIN_CONFIG = {
-    apiKey: '$2a$10$h8vxevEkPmm6QekSX6y3uuIM5wOPUgT0mTx02sZzEEh8GlNhaptjG',   // 在这里填入您的实际API Key
-    binId: '6969b59a43b1c97be933c359'             // 在这里填入您的实际Bin ID
+    apiKey: '$2a$10$h8vxevEkPmm6QekSX6y3uuIM5wOPUgT0mTx02sZzEEh8GlNhaptjG',   // 例如：60f1a2b3c4d5e6f7g8h9i0j1k2l3m4n5
+    binId: '6969b59a43b1c97be933c359'                 // 例如：6969b59a43b1c97be933c359
 };
 
 // 初始化云数据管理器

@@ -2,9 +2,9 @@
 class CloudDataManager {
     constructor() {
         // 使用 jsonbin.io 免费存储（每月1GB流量）
-        this.apiKey = 'your-jsonbin-api-key'; // 注册jsonbin.io获取
-        this.binId = 'your-bin-id'; // 创建一个bin获取ID
-        this.baseURL = 'https://api.jsonbin.io/v3';
+        this.apiKey = '$2a$10$h8vxevEkPmm6QekSX6y3uuIM5wOPUgT0mTx02sZzEEh8GlNhaptjG'; // 注册jsonbin.io获取
+        this.binId = '6969b59a43b1c97be933c359'; // 创建一个bin获取ID
+        this.baseURL = 'https://api.jsonbin.io/v3/b/6969b59a43b1c97be933c359';
     }
 
     // 初始化存储桶
@@ -40,17 +40,32 @@ class CloudDataManager {
     // 读取抽奖记录
     async readRecords() {
         try {
+            console.log('读取云端数据，Bin ID:', this.binId);
             const response = await fetch(`${this.baseURL}/b/${this.binId}/latest`, {
                 headers: {
                     'X-Master-Key': this.apiKey
                 }
             });
             
+            console.log('读取响应状态:', response.status);
+            
             if (response.ok) {
                 const data = await response.json();
-                return data.record ? data.record.records : [];
+                console.log('读取到的数据:', data);
+                
+                // JSONBin v3版本返回数据结构
+                if (data.record && data.record.records) {
+                    return data.record.records;
+                } else if (data.records) {
+                    return data.records;
+                } else {
+                    console.warn('数据结构异常，返回空数组');
+                    return [];
+                }
             } else {
-                console.warn('云端数据读取失败，使用本地存储');
+                const errorText = await response.text();
+                console.error('云端数据读取失败，错误信息:', errorText);
+                console.warn('使用本地存储');
                 return this.getLocalRecords();
             }
         } catch (error) {
@@ -99,6 +114,9 @@ class CloudDataManager {
         };
 
         try {
+            console.log('更新云端数据:', updateData);
+            console.log('Bin ID:', this.binId);
+            
             const response = await fetch(`${this.baseURL}/b/${this.binId}`, {
                 method: 'PUT',
                 headers: {
@@ -108,11 +126,17 @@ class CloudDataManager {
                 body: JSON.stringify(updateData)
             });
 
+            console.log('更新响应状态:', response.status);
+
             if (!response.ok) {
-                throw new Error('更新云端数据失败');
+                const errorText = await response.text();
+                console.error('更新云端数据失败，错误信息:', errorText);
+                throw new Error(`更新云端数据失败: ${response.status} - ${errorText}`);
             }
 
-            return await response.json();
+            const result = await response.json();
+            console.log('云端更新成功:', result);
+            return result;
         } catch (error) {
             console.error('更新云端数据失败:', error);
             throw error;
