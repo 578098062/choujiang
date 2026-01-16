@@ -25,7 +25,7 @@ const participants = [
 let currentUser = null;
 let isSpinning = false;
 
-// 初始化奖品池
+    // 初始化奖品池
 function initPrizePool() {
     window.prizePool = [];
     prizes.forEach((prize, index) => {
@@ -37,6 +37,7 @@ function initPrizePool() {
             });
         }
     });
+    console.log('奖品池初始化完成:', window.prizePool);
 }
 
 // Fisher-Yates 洗牌算法
@@ -143,7 +144,7 @@ function generateWheel() {
 }
 
 // 验证姓名输入
-function verifyUserName() {
+async function verifyUserName() {
     const nameInput = document.getElementById('nameInput');
     const nameError = document.getElementById('nameError');
     const submitBtn = document.getElementById('submitName');
@@ -152,20 +153,36 @@ function verifyUserName() {
     if (!userName) {
         nameError.textContent = '请输入姓名';
         nameError.classList.remove('hidden');
+        nameInput.focus();
         return;
     }
+    
+    // 显示loading状态
+    submitBtn.textContent = '验证中...';
+    submitBtn.disabled = true;
+    nameError.classList.add('hidden');
     
     // 检查是否在参与者名单中
     if (!participants.includes(userName)) {
         nameError.textContent = '姓名不在名单中，请核对后重新输入';
         nameError.classList.remove('hidden');
+        submitBtn.textContent = '验证身份';
+        submitBtn.disabled = false;
         nameInput.focus();
         return;
     }
     
     // 验证通过
-    nameError.classList.add('hidden');
-    selectUser(userName);
+    try {
+        await selectUser(userName);
+    } catch (error) {
+        console.error('用户验证失败:', error);
+        nameError.textContent = '验证失败，请重试';
+        nameError.classList.remove('hidden');
+    } finally {
+        submitBtn.textContent = '验证身份';
+        submitBtn.disabled = false;
+    }
 }
 
 // 监听回车键提交
@@ -239,6 +256,10 @@ async function startLottery() {
     const prizeIndex = Math.floor(Math.random() * currentPool.length);
     const selectedPrize = currentPool[prizeIndex];
     
+    console.log('选中的奖品:', selectedPrize);
+    console.log('奖品名称:', selectedPrize.name);
+    console.log('奖品索引:', selectedPrize.originalIndex);
+    
     // 计算转盘角度
     const targetAngle = 360 * 5 + (selectedPrize.originalIndex * (360 / prizes.length) + 360 / prizes.length / 2);
     
@@ -267,7 +288,7 @@ async function startLottery() {
         }
         
         // 显示结果
-        showResult(selectedPrize.name);
+        showResult(currentUser, selectedPrize.name);
         
         // 重置状态
         isSpinning = false;
@@ -277,10 +298,14 @@ async function startLottery() {
 }
 
 // 显示抽奖结果
-function showResult(prizeName) {
+function showResult(userName, prizeName) {
     document.getElementById('wheelPage').classList.add('hidden');
     document.getElementById('resultPage').classList.remove('hidden');
+    
+    // 显示对应的中奖信息
     document.getElementById('prizeDisplay').textContent = prizeName;
+    
+    console.log('显示抽奖结果:', { userName, prizeName });
     
     // 创建彩带效果
     createConfetti();
@@ -307,7 +332,10 @@ function createConfetti() {
 // 分享结果
 function shareResult() {
     const prize = document.getElementById('prizeDisplay').textContent;
-    const text = `我在幸运大转盘活动中获得了【${prize}】！🎉`;
+    const userName = currentUser || '某用户';
+    const text = `${userName}在幸运大转盘活动中获得了【${prize}】！🎉`;
+    
+    console.log('分享内容:', { userName, prize, text });
     
     if (navigator.share) {
         navigator.share({
@@ -345,6 +373,10 @@ function logout() {
     
     // 显示验证页面
     document.getElementById('verifyPage').classList.remove('hidden');
+    
+    // 清空输入框
+    const nameInput = document.getElementById('nameInput');
+    nameInput.value = '';
     
     // 重置转盘
     document.getElementById('wheel').style.transform = 'rotate(0deg)';
