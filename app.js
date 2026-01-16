@@ -287,8 +287,10 @@ async function startLottery() {
         // 2. 立即计算并触发动画
         const duration = 8; // 总时长 8 秒 (3s 加速 + 5s 减速)
         const sectionAngle = 360 / prizes.length;
+        // 在奖品扇形区域内增加随机偏移量 (10% - 90% 之间)，避免每次都精准停在正中间
+        const randomOffset = (0.1 + Math.random() * 0.8) * sectionAngle;
         // 增加基础圈数至 12 圈，视觉效果更震撼
-        const finalTargetRotation = -(360 * 12 + (selectedIndex * sectionAngle + sectionAngle / 2));
+        const finalTargetRotation = -(360 * 12 + (selectedIndex * sectionAngle + randomOffset));
         
         console.log('🚀 物理仿真启动 [加速 3s -> 减速 5s]，目标:', selectedPrizeType.name);
         
