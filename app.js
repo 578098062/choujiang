@@ -1,30 +1,58 @@
-// 奖品配置 (总计59份奖品给59人)
-const prizes = [
-    { name: '重组与突破', count: 20, color: '#FF6B6B' },
-    { name: '人类简史', count: 15, color: '#4ECDC4' },
-    { name: '时间简史', count: 16, color: '#45B7D1' },
-    { name: '颈椎按摩仪', count: 1, color: '#FFA07A' },
-    { name: 'WPS大会员', count: 1, color: '#98D8C8' },
-    { name: '筋膜枪', count: 1, color: '#FFD93D' },
-    { name: '马克杯套装', count: 2, color: '#6C5CE7' },
-    { name: '脖枕', count: 2, color: '#A8E6CF' },
-    { name: '马克杯红', count: 1, color: '#FFB6C1' }
-];
-
-// 人员名单
-const participants = [
-    '车玉龙', '程康', '赵笙薇', '杨斌', '张国英', '张万宁', '梁法栋', '李天', '林野', '经纬',
-    '马景灏', '卢秋霞', '张红雨', '李罗', '时保卓', '秦基伟', '吴林', '李鹏东', '胡洪鹏', '赵绵武',
-    '刘冲', '李金娜', '王振杰', '王力丹', '魏来', '张鹏', '那兴俊', '乔禹', '刘赛', '吴悉恺',
-    '沈立伟', '张毅', '谢建伟', '郝立军', '张晓辉', '陶娜', '姚国辉', '肖称华', '阮仕坤', '曹帅',
-    '王卿', '徐婷', '吴鹏', '武金鹏', '祝新民', '梁亮', '张维沂', '黄欢', '孙玲', '宋浩',
-    '李项喆', '王圆丽', '陈明威', '刘洋', '刘文霞', '梁鑫', '杨学伶', '刘鹏鹏', '魏文龙'
-];
+// 从全局配置加载数据
+const prizes = window.APP_CONFIG.prizes;
+const participants = window.APP_CONFIG.participants;
 
 // 全局变量
 let currentUser = null;
 let isSpinning = false;
 let availablePrizes = []; // 存储剩余可用的奖品
+
+// 计算奖品角度分布 (根据 count 自动计算，并强制最小角度为 20 度以保证视觉效果)
+function getPrizeAngles() {
+    const minAngle = 20; // 最小扇形角度
+    const totalCount = prizes.reduce((sum, p) => sum + p.count, 0);
+    
+    // 1. 识别需要保底的奖品
+    let totalForcedAngle = 0;
+    const forcedIndices = new Set();
+    
+    prizes.forEach((p, i) => {
+        const rawAngle = (p.count / totalCount) * 360;
+        if (rawAngle < minAngle) {
+            forcedIndices.add(i);
+            totalForcedAngle += minAngle;
+        }
+    });
+    
+    // 2. 计算剩余可分配的角度和数量
+    const remainingAngle = 360 - totalForcedAngle;
+    const remainingCount = prizes.reduce((sum, p, i) => {
+        return forcedIndices.has(i) ? sum : sum + p.count;
+    }, 0);
+    
+    // 3. 最终角度分配
+    let currentAngle = 0;
+    return prizes.map((prize, i) => {
+        let angle;
+        if (forcedIndices.has(i)) {
+            angle = minAngle;
+        } else {
+            // 剩余角度按 count 比例分配给大面额奖品
+            angle = (prize.count / remainingCount) * remainingAngle;
+        }
+        
+        const result = {
+            ...prize,
+            startAngle: currentAngle,
+            endAngle: currentAngle + angle,
+            middleAngle: currentAngle + angle / 2,
+            angle: angle,
+            actualWeight: ((angle / 360) * 100).toFixed(1) + '%' // 最终视觉占比
+        };
+        currentAngle += angle;
+        return result;
+    });
+}
 
 // 加载剩余奖品池并缓存到内存
 async function loadRemainingPrizes() {
@@ -84,12 +112,12 @@ function generateWheel() {
     const centerX = 160;
     const centerY = 160;
     const radius = 150;
-    const totalSections = prizes.length;
-    const anglePerSection = 360 / totalSections;
+    const prizeAngles = getPrizeAngles();
     
-    prizes.forEach((prize, index) => {
-        const startAngle = index * anglePerSection - 90; // -90度让第一个扇形从顶部开始
-        const endAngle = (index + 1) * anglePerSection - 90;
+    prizeAngles.forEach((prize, index) => {
+        const startAngle = prize.startAngle - 90; // -90度让第一个扇形从顶部开始
+        const endAngle = prize.endAngle - 90;
+        const anglePerSection = prize.angle;
         
         // 计算扇形路径
         const startAngleRad = startAngle * Math.PI / 180;
@@ -286,13 +314,17 @@ async function startLottery() {
 
         // 2. 立即计算并触发动画
         const duration = 8; // 总时长 8 秒 (3s 加速 + 5s 减速)
-        const sectionAngle = 360 / prizes.length;
-        // 在奖品扇形区域内增加随机偏移量 (10% - 90% 之间)，避免每次都精准停在正中间
-        const randomOffset = (0.1 + Math.random() * 0.8) * sectionAngle;
-        // 增加基础圈数至 12 圈，视觉效果更震撼
-        const finalTargetRotation = -(360 * 12 + (selectedIndex * sectionAngle + randomOffset));
+        const prizeAngles = getPrizeAngles();
+        const selectedAngleInfo = prizeAngles[selectedIndex];
         
-        console.log('🚀 物理仿真启动 [加速 3s -> 减速 5s]，目标:', selectedPrizeType.name);
+        // 在该奖品的扇形区域内增加随机偏移量 (10% - 90% 之间)
+        const randomOffset = (0.1 + Math.random() * 0.8) * selectedAngleInfo.angle;
+        
+        // 增加基础圈数至 12 圈，视觉效果更震撼
+        // 计算公式：-(基础圈数 + 起始角度 + 随机偏移)
+        const finalTargetRotation = -(360 * 12 + selectedAngleInfo.startAngle + randomOffset);
+        
+        console.log(`🚀 物理仿真启动 [加速 3s -> 减速 5s]，目标: ${selectedPrizeType.name}, 偏移量: ${randomOffset.toFixed(2)}°`);
         
         // 使用定制的贝塞尔曲线实现非对称加减速
         // 0.3, 0 控制起步，使峰值出现在约 3s 处
