@@ -24,30 +24,48 @@ const participants = [
 // 全局变量
 let currentUser = null;
 let isSpinning = false;
+let availablePrizes = []; // 存储剩余可用的奖品
 
-    // 初始化奖品池
-function initPrizePool() {
-    window.prizePool = [];
-    prizes.forEach((prize, index) => {
-        for (let i = 0; i < prize.count; i++) {
-            window.prizePool.push({
-                ...prize,
-                uniqueId: `${prize.name}_${i}`,
-                originalIndex: index
-            });
+// 加载剩余奖品池并缓存到内存
+async function loadRemainingPrizes() {
+    try {
+        const remaining = await getRemainingPrizePool();
+        if (remaining) {
+            availablePrizes = remaining;
+            console.log('✅ 奖品池已更新，剩余总数:', availablePrizes.length);
         }
-    });
-    console.log('奖品池初始化完成:', window.prizePool);
+    } catch (error) {
+        console.error('更新奖品池失败:', error);
+    }
 }
 
-// Fisher-Yates 洗牌算法
-function shuffleArray(array) {
-    const shuffled = [...array];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+// 获取剩余奖品池
+async function getRemainingPrizePool() {
+    try {
+        // 获取已抽奖记录
+        const drawnRecords = await cloudManager.readRecords();
+        const drawnPrizeIds = new Set(drawnRecords.map(r => r.prizeId));
+        
+        // 过滤掉已抽的奖品
+        const remainingPrizes = [];
+        prizes.forEach((prize, index) => {
+            for (let i = 0; i < prize.count; i++) {
+                const uniqueId = `${prize.name}_${i}`;
+                if (!drawnPrizeIds.has(uniqueId)) {
+                    remainingPrizes.push({
+                        ...prize,
+                        uniqueId: uniqueId,
+                        originalIndex: index
+                    });
+                }
+            }
+        });
+        
+        return remainingPrizes;
+    } catch (error) {
+        console.error('获取剩余奖品池失败:', error);
+        return null;
     }
-    return shuffled;
 }
 
 // 生成转盘
@@ -178,7 +196,6 @@ async function verifyUserName() {
     } catch (error) {
         console.error('用户验证失败:', error);
         nameError.textContent = '验证失败，请重试';
-        nameError.classList.remove('hidden');
     } finally {
         submitBtn.textContent = '验证身份';
         submitBtn.disabled = false;
@@ -239,62 +256,68 @@ function showAlreadyDrawn(userName, prize) {
     document.getElementById('drawnPrize').textContent = prize;
 }
 
-// 开始抽奖
+// 开始抽奖 - 极致平滑性能优化
 async function startLottery() {
     if (isSpinning) return;
     
+    // 0. 预检查：直接使用内存中的缓存，确保零延迟响应
+    if (!availablePrizes || availablePrizes.length === 0) {
+        alert('所有奖品已抽完或正在加载，请刷新页面重试');
+        return;
+    }
+
     isSpinning = true;
     const startBtn = document.getElementById('startBtn');
-    startBtn.textContent = '抽奖中...';
-    startBtn.style.cursor = 'not-allowed';
-    
-    // 初始化奖品池
-    initPrizePool();
-    const currentPool = shuffleArray(prizePool);
-    
-    // 随机选择一个奖品
-    const prizeIndex = Math.floor(Math.random() * currentPool.length);
-    const selectedPrize = currentPool[prizeIndex];
-    
-    console.log('选中的奖品:', selectedPrize);
-    console.log('奖品名称:', selectedPrize.name);
-    console.log('奖品索引:', selectedPrize.originalIndex);
-    
-    // 计算转盘角度
-    const targetAngle = 360 * 5 + (selectedPrize.originalIndex * (360 / prizes.length) + 360 / prizes.length / 2);
-    
-    // 旋转转盘
     const wheel = document.getElementById('wheel');
-    wheel.style.transform = `rotate(${targetAngle}deg)`;
     
-    // 等待动画完成
-    setTimeout(async () => {
-        // 保存抽奖记录到云端
-        try {
-            await cloudManager.saveRecord(
-                currentUser, 
-                selectedPrize.name, 
-                selectedPrize.uniqueId
-            );
-            console.log('云端保存成功');
-        } catch (error) {
-            console.error('云端保存失败:', error);
-            alert('抽奖记录保存失败，请检查网络连接');
-            // 保存失败时不显示结果，允许重新尝试
+    try {
+        // 1. 瞬间确定中奖结果 (同步计算，无网络延迟)
+        const availableIndices = [];
+        prizes.forEach((prize, index) => {
+            if (availablePrizes.some(rp => rp.name === prize.name)) {
+                availableIndices.push(index);
+            }
+        });
+        
+        const selectedIndex = availableIndices[Math.floor(Math.random() * availableIndices.length)];
+        const selectedPrizeType = prizes[selectedIndex];
+        const specificPrizes = availablePrizes.filter(rp => rp.name === selectedPrizeType.name);
+        let selectedPrize = specificPrizes[0];
+
+        // 2. 立即计算并触发动画
+        const duration = 8; // 总时长 8 秒 (3s 加速 + 5s 减速)
+        const sectionAngle = 360 / prizes.length;
+        // 增加基础圈数至 12 圈，视觉效果更震撼
+        const finalTargetRotation = -(360 * 12 + (selectedIndex * sectionAngle + sectionAngle / 2));
+        
+        console.log('🚀 物理仿真启动 [加速 3s -> 减速 5s]，目标:', selectedPrizeType.name);
+        
+        // 使用定制的贝塞尔曲线实现非对称加减速
+        // 0.3, 0 控制起步，使峰值出现在约 3s 处
+        // 0.2, 1 提供长达 5s 的平滑减速
+        wheel.style.transition = `transform ${duration}s cubic-bezier(0.3, 0, 0.2, 1)`;
+        wheel.style.transform = `rotate(${finalTargetRotation}deg)`;
+
+        // 3. 异步同步数据库 (在转盘旋转时，偷偷在后台保存，不影响动画)
+        const syncTask = cloudManager.saveRecord(currentUser, selectedPrize.name, selectedPrize.uniqueId)
+            .then(() => console.log('💾 后台数据同步完成'))
+            .catch(err => console.error('💾 后台同步失败:', err));
+
+        // 4. 动画结束后，额外停留 1 秒再弹出结果，增强仪式感
+        setTimeout(() => {
+            showResult(currentUser, selectedPrize.name);
+            startBtn.textContent = '已抽奖';
+            startBtn.disabled = true;
             isSpinning = false;
-            startBtn.textContent = '开始';
-            startBtn.style.cursor = 'pointer';
-            return;
-        }
-        
-        // 显示结果
-        showResult(currentUser, selectedPrize.name);
-        
-        // 重置状态
+            
+            // 抽奖结束后更新本地缓存，为下一个人准备
+            loadRemainingPrizes();
+        }, (duration + 1) * 1000); // duration (8s) + 停留时长 (1s)
+
+    } catch (error) {
+        console.error('抽奖异常:', error);
         isSpinning = false;
-        startBtn.textContent = '开始';
-        startBtn.style.cursor = 'pointer';
-    }, 4000);
+    }
 }
 
 // 显示抽奖结果
@@ -398,6 +421,9 @@ async function initApp() {
         
         generateWheel();
         setupInputListeners();
+        
+        // 预加载奖品池
+        loadRemainingPrizes();
         
         // 绑定开始按钮事件
         document.getElementById('startBtn').addEventListener('click', startLottery);
