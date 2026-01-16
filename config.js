@@ -1,3 +1,8 @@
+// bin 数据结构
+// {
+//   "records": [],
+//   "last_updated": ""
+// }
 // 配置文件 - 使用 JSONBin.io 存储
 const JSONBIN_CONFIG = {
     apiKey: '$2a$10$6DvGREHxbTCwbXxvZCl.OelVu2PuxCldw3Lhugi7w7Gogrqpa94i6',   // X-Master-Key
