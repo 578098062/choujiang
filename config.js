@@ -25,25 +25,31 @@ const JSONBIN_CONFIG = {
     binId: '6969b59a43b1c97be933c359'             // 在这里填入您的实际Bin ID
 };
 
-// 根据配置创建数据管理器
-let cloudManager;
-
-if (STORAGE_TYPE === 'github') {
-    cloudManager = new CloudDataManager();
-    Object.assign(cloudManager, GITHUB_CONFIG);
-} else if (STORAGE_TYPE === 'gitee') {
-    cloudManager = new CloudDataManager();
-    Object.assign(cloudManager, GITEE_CONFIG);
-} else if (STORAGE_TYPE === 'jsonbin') {
-    cloudManager = new CloudDataManager();
-    Object.assign(cloudManager, JSONBIN_CONFIG);
-} else {
-    // 使用本地存储
-    cloudManager = {
-        readRecords: () => [],
-        saveRecord: () => false
-    };
+// 初始化云数据管理器
+function initCloudManager() {
+    if (STORAGE_TYPE === 'github') {
+        const manager = new CloudDataManager();
+        Object.assign(manager, GITHUB_CONFIG);
+        return manager;
+    } else if (STORAGE_TYPE === 'gitee') {
+        const manager = new CloudDataManager();
+        Object.assign(manager, GITEE_CONFIG);
+        return manager;
+    } else if (STORAGE_TYPE === 'jsonbin') {
+        const manager = new CloudDataManager();
+        Object.assign(manager, JSONBIN_CONFIG);
+        return manager;
+    } else {
+        // 使用本地存储
+        return {
+            readRecords: () => [],
+            saveRecord: () => false
+        };
+    }
 }
+
+// 创建数据管理器
+let cloudManager = null;
 
 // 导出配置
 window.STORAGE_CONFIG = {

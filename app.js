@@ -128,7 +128,6 @@ class LotteryDB {
 }
 
 const lotteryDB = new LotteryDB();
-const cloudManager = new CloudDataManager();
 
 // 初始化奖品池
 function initPrizePool() {
@@ -485,6 +484,12 @@ function logout() {
 async function initApp() {
     try {
         await lotteryDB.init();
+        
+        // 初始化云数据管理器
+        if (typeof initCloudManager === 'function') {
+            cloudManager = initCloudManager();
+        }
+        
         generateWheel();
         setupInputListeners();
         
